@@ -1,0 +1,15 @@
+{
+  "total_frames": 3,
+  "avg_fps": 1.9015221619342404,
+  "total_tracks": 0,
+  "total_alerts": 0,
+  "latency": {
+    "detection+tracking": {
+      "avg_ms": 356.7378666672691,
+      "p95_ms": 598.2665300010922,
+      "p99_ms": 627.5588260012955,
+      "count": 3
+    }
+  },
+  "alerts": []
+}

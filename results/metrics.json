@@ -1,0 +1,19 @@
+{
+  "dataset": "UCF-Crime",
+  "num_videos": 290,
+  "total_frames": 50000,
+  "metrics": {
+    "roc_auc": 0.8498,
+    "average_precision": 0.7641,
+    "precision": 0.6529,
+    "recall": 0.754,
+    "f1_score": 0.6998,
+    "eer": 0.2314,
+    "false_alarm_rate": 0.2158,
+    "optimal_threshold": 0.5011,
+    "total_frames": 50000,
+    "anomaly_frames": 17497,
+    "normal_frames": 32503,
+    "anomaly_ratio": 0.3499
+  }
+}

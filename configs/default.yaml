@@ -1,0 +1,65 @@
+# ============================================================
+# Real-Time Video Anomaly Detection — Master Configuration
+# ============================================================
+
+# ── Detector (YOLOv8) ──────────────────────────────────────
+ddetector:
+  model: "yolov8s.pt"
+  device: "cpu"
+  conf_threshold: 0.25
+  iou_threshold: 0.45
+  classes: [0, 1, 2, 3, 5, 7]
+  img_size: 640
+  half: false
+  max_det: 100                      # Maximum detections per frame
+
+# ── Tracker (ByteTrack) ───────────────────────────────────
+tracker:
+  config: "configs/bytetrack.yaml"
+  track_buffer: 30                   # Frames to keep lost tracks
+  match_threshold: 0.8               # IoU threshold for matching
+  min_track_length: 5                # Minimum frames for a valid track
+
+# ── Anomaly Classifier (VideoMAE) ─────────────────────────
+anomaly:
+  model_name: "MCG-NJU/videomae-base"  # HuggingFace model ID
+  num_classes: 14                       # UCF-Crime classes (13 anomaly + 1 normal)
+  clip_length: 16                       # Number of frames per input clip
+  stride: 4                             # Frame stride for clip sampling
+  anomaly_threshold: 0.65              # Score above this → anomaly
+  device: "cpu"
+  batch_size: 1                        # Clips per batch for inference
+
+# ── Video I/O ─────────────────────────────────────────────
+video:
+  source: 0                           # 0 = webcam | "rtsp://..." | "/path/to/video.mp4"
+  width: 1280
+  height: 720
+  fps: 30
+  buffer_size: 64                     # Frame buffer for async reading
+
+# ── Pipeline ──────────────────────────────────────────────
+pipeline:
+  mode: "realtime"                    # "realtime" | "offline"
+  show_display: true                  # Show OpenCV window
+  save_output: true                   # Save annotated video
+  output_path: "outputs/"
+  log_level: "INFO"
+
+# ── Heatmap / Visualization ──────────────────────────────
+visualization:
+  show_tracks: true                   # Draw tracking trajectories
+  show_heatmap: true                  # Overlay anomaly heatmap
+  show_scores: true                   # Show anomaly scores on bboxes
+  show_fps: true                      # Display FPS counter
+  trail_length: 30                    # Track trail length in frames
+  normal_color: [0, 255, 0]           # Green for normal
+  anomaly_color: [0, 0, 255]          # Red for anomaly
+  heatmap_alpha: 0.4                  # Heatmap overlay transparency
+
+# ── Evaluation ────────────────────────────────────────────
+evaluation:
+  dataset_path: "data/UCF-Crime/"
+  test_split: "Temporal_Anomaly_Annotation_for_Testing_Videos.txt"
+  results_dir: "results/"
+  save_plots: true

@@ -1,0 +1,16 @@
+# ============================================================
+# ByteTrack Tracker Configuration
+# ============================================================
+# Reference: https://github.com/ifzhang/ByteTrack
+
+tracker_type: bytetrack
+
+# ── Association thresholds ────────────────────────────────
+track_high_thresh: 0.5         # Detection confidence threshold for first association
+track_low_thresh: 0.1          # Detection confidence threshold for second association
+new_track_thresh: 0.6          # Detection confidence threshold for initializing new track
+match_thresh: 0.8              # IoU matching threshold
+
+# ── Track lifecycle ──────────────────────────────────────
+track_buffer: 30               # Frames to keep lost tracks alive
+fuse_score: true               # Fuse detection confidence into IoU cost
