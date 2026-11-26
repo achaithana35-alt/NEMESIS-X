@@ -105,6 +105,11 @@ class MultiObjectTracker:
         self.match_threshold = config.get("match_threshold", 0.8)
         self.min_track_length = config.get("min_track_length", 5)
         self.tracker_config = config.get("config", "configs/bytetrack.yaml")
+        self.device = detector_config.get("device", "auto")
+        if self.device == "auto":
+            import torch
+
+            self.device = "0" if torch.cuda.is_available() else "cpu"
 
         # Active tracks indexed by track_id
         self._tracks: dict[int, Track] = {}
@@ -146,9 +151,8 @@ class MultiObjectTracker:
             iou=self.detector_config.get("iou_threshold", 0.45),
             classes=self.detector_config.get("classes", [0]),
             imgsz=self.detector_config.get("img_size", 640),
-            half=self.detector_config.get("half", True),
             max_det=self.detector_config.get("max_det", 100),
-            device=self.detector_config.get("device", "cpu"),
+            device=self.device,
             verbose=False,
         )
 

@@ -1,19 +1,12 @@
-"""VideoMAE-based temporal anomaly classifier.
+"""VideoMAE action classification for short temporal clips.
 
-Classifies short video clips (16 frames) extracted from tracked objects as
-normal or anomalous using a VideoMAE (Video Masked Autoencoder) backbone
-fine-tuned on the UCF-Crime dataset.
-
-Supports two classification modes:
-  1. **Binary** — Normal vs. Anomalous (production deployment).
-  2. **Multi-class** — 13 anomaly categories + Normal (evaluation).
-
-The classifier operates on cropped track regions, enabling per-object anomaly
-scoring rather than full-frame analysis.
+The pretrained Kinetics-400 checkpoint reports action labels. It is not
+trained to classify UCF-Crime anomalies, so its outputs must not be presented
+as anomaly probabilities.
 
 Typical usage:
-    classifier = AnomalyClassifier(config)
-    score = classifier.classify_clip(clip_frames)
+    classifier = VideoMAEActionClassifier(config)
+    action = classifier.classify_clip(clip_frames)
 """
 
 import time
@@ -35,41 +28,20 @@ except ImportError:
     )
 
 
-# UCF-Crime anomaly categories
-UCF_CRIME_CLASSES = [
-    "Normal",
-    "Abuse",
-    "Arrest",
-    "Arson",
-    "Assault",
-    "Burglary",
-    "Explosion",
-    "Fighting",
-    "RoadAccidents",
-    "Robbery",
-    "Shooting",
-    "Shoplifting",
-    "Stealing",
-    "Vandalism",
-]
-
-
 @dataclass
-class AnomalyResult:
-    """Container for anomaly classification output.
+class ActionResult:
+    """Container for a temporal action classification result.
 
     Attributes:
-        anomaly_score:   Probability of anomaly (0 = normal, 1 = anomalous).
-        predicted_class: Predicted class name (e.g., "Fighting").
-        class_scores:    Dict mapping class names to probabilities.
-        is_anomaly:      Whether the score exceeds the threshold.
-        latency_ms:      Inference time in milliseconds.
+        predicted_action: Highest-scoring Kinetics-400 action label.
+        confidence:       Softmax score relative to the model's action labels.
+        class_scores:     Dict mapping action labels to softmax scores.
+        latency_ms:       Inference time in milliseconds.
     """
 
-    anomaly_score: float
-    predicted_class: str
+    predicted_action: str
+    confidence: float
     class_scores: dict[str, float]
-    is_anomaly: bool
     latency_ms: float
 
 
@@ -119,31 +91,26 @@ class MILAggregator(nn.Module):
         return score.squeeze()
 
 
-class AnomalyClassifier:
-    """VideoMAE-based video anomaly classifier.
-
-    Uses a pre-trained VideoMAE model as a temporal feature extractor and
-    classifier. Operates on 16-frame clips cropped from tracked object
-    bounding boxes.
+class VideoMAEActionClassifier:
+    """VideoMAE Kinetics-400 action classifier.
 
     Args:
         config: Dictionary with anomaly classifier configuration:
             - model_name (str):         HuggingFace model ID.
-            - num_classes (int):        Number of output classes.
             - clip_length (int):        Frames per input clip.
             - stride (int):             Frame stride for sampling.
-            - anomaly_threshold (float): Score threshold for anomaly flag.
             - device (str):             Device string.
             - batch_size (int):         Inference batch size.
     """
 
     def __init__(self, config: dict):
         self.config = config
-        self.model_name = config.get("model_name", "MCG-NJU/videomae-base")
-        self.num_classes = config.get("num_classes", 14)
+        self.model_name = config.get(
+            "model_name",
+            "MCG-NJU/videomae-base-finetuned-kinetics",
+        )
         self.clip_length = config.get("clip_length", 16)
         self.stride = config.get("stride", 4)
-        self.anomaly_threshold = config.get("anomaly_threshold", 0.65)
         self.batch_size = config.get("batch_size", 1)
 
         # Device
@@ -160,21 +127,21 @@ class AnomalyClassifier:
         self._load_model()
 
         logger.success(
-            f"AnomalyClassifier ready | model={self.model_name} | "
+            f"VideoMAE action classifier ready | model={self.model_name} | "
             f"device={self.device} | clip_length={self.clip_length}"
         )
 
     # ── Public API ─────────────────────────────────────────
 
-    def classify_clip(self, frames: list[np.ndarray]) -> AnomalyResult:
-        """Classify a video clip as normal or anomalous.
+    def classify_clip(self, frames: list[np.ndarray]) -> ActionResult:
+        """Return the highest-scoring Kinetics-400 action for a clip.
 
         Args:
             frames: List of BGR numpy arrays (exactly clip_length frames).
                     Can be full frames or cropped bounding box regions.
 
         Returns:
-            AnomalyResult with scores and classification.
+            ActionResult with action labels and relative model scores.
         """
         t0 = time.perf_counter()
 
@@ -185,38 +152,33 @@ class AnomalyClassifier:
         # Inference
         with torch.no_grad():
             outputs = self.model(pixel_values)
-            logits = outputs.logits  # (1, num_classes)
+            logits = outputs.logits  # (1, number of action labels)
 
         # Post-process
         probs = F.softmax(logits, dim=-1).cpu().numpy()[0]
         predicted_idx = int(np.argmax(probs))
 
-        # Build class scores dict
-        class_labels = (
-            UCF_CRIME_CLASSES
-            if self.num_classes == 14
-            else [f"class_{i}" for i in range(self.num_classes)]
-        )
-        class_scores = {}
-        for i, label in enumerate(class_labels):
-            if i < len(probs):
-                class_scores[label] = float(probs[i])
-
-        # Anomaly score = 1 - P(Normal)
-        normal_prob = class_scores.get("Normal", probs[0])
-        anomaly_score = 1.0 - normal_prob
-
-        predicted_class = class_labels[predicted_idx] if predicted_idx < len(class_labels) else f"class_{predicted_idx}"
+        configured_labels = self.model.config.id2label
+        class_labels = [
+            configured_labels.get(
+                index,
+                configured_labels.get(str(index), f"class_{index}"),
+            )
+            for index in range(len(probs))
+        ]
+        class_scores = {
+            label: float(probability)
+            for label, probability in zip(class_labels, probs)
+        }
 
         elapsed = time.perf_counter() - t0
         latency_ms = elapsed * 1000
         self._latencies.append(elapsed)
 
-        return AnomalyResult(
-            anomaly_score=anomaly_score,
-            predicted_class=predicted_class,
+        return ActionResult(
+            predicted_action=class_labels[predicted_idx],
+            confidence=float(probs[predicted_idx]),
             class_scores=class_scores,
-            is_anomaly=anomaly_score >= self.anomaly_threshold,
             latency_ms=latency_ms,
         )
 
@@ -257,11 +219,7 @@ class AnomalyClassifier:
 
         self.processor = VideoMAEImageProcessor.from_pretrained(self.model_name)
 
-        self.model = VideoMAEForVideoClassification.from_pretrained(
-            self.model_name,
-            num_labels=self.num_classes,
-            ignore_mismatched_sizes=True,
-        )
+        self.model = VideoMAEForVideoClassification.from_pretrained(self.model_name)
         self.model.to(self.device)
         self.model.eval()
 
@@ -309,6 +267,8 @@ class AnomalyClassifier:
         Pads by repeating the last frame or uniformly samples if too long.
         """
         n = len(frames)
+        if n == 0:
+            raise ValueError("Cannot classify an empty video clip.")
         target = self.clip_length
 
         if n == target:
@@ -321,3 +281,6 @@ class AnomalyClassifier:
             # Uniform temporal sampling
             indices = np.linspace(0, n - 1, target, dtype=int)
             return [frames[i] for i in indices]
+
+
+AnomalyClassifier = VideoMAEActionClassifier

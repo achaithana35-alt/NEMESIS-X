@@ -21,14 +21,16 @@ def draw_detections(
     tracks: list,
     anomaly_scores: dict[int, float] | None = None,
     config: dict | None = None,
+    action_predictions: dict[int, tuple[str, float]] | None = None,
 ) -> np.ndarray:
     """Draw detection boxes, track IDs, and anomaly scores on a frame.
 
     Args:
         frame:          BGR image to annotate (modified in place).
         tracks:         List of Track objects from the tracker.
-        anomaly_scores: Optional dict mapping track_id → anomaly score.
+        anomaly_scores: Optional legacy anomaly scores.
         config:         Visualization config dict.
+        action_predictions: Optional track ID to (action label, confidence) map.
 
     Returns:
         Annotated frame.
@@ -54,13 +56,16 @@ def draw_detections(
         if anomaly_scores and tid in anomaly_scores:
             score = anomaly_scores[tid]
 
-        if score >= anomaly_threshold:
-            color = anomaly_color
-            thickness = 3
+        if anomaly_scores and tid in anomaly_scores:
+            if score >= anomaly_threshold:
+                color = anomaly_color
+                thickness = 3
+            else:
+                t = min(score / anomaly_threshold, 1.0)
+                color = _interpolate_color(normal_color, anomaly_color, t)
+                thickness = 2
         else:
-            # Interpolate color from green to red based on score
-            t = min(score / anomaly_threshold, 1.0)
-            color = _interpolate_color(normal_color, anomaly_color, t)
+            color = normal_color
             thickness = 2
 
         # Draw bounding box
@@ -70,6 +75,9 @@ def draw_detections(
         label = f"ID:{tid} {track.class_name}"
         if show_scores and anomaly_scores and tid in anomaly_scores:
             label += f" | Anomaly: {score:.2f}"
+        if action_predictions and tid in action_predictions:
+            action, confidence = action_predictions[tid]
+            label += f" | {action}: {confidence:.2f}"
 
         label_size, _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
         cv2.rectangle(

@@ -179,6 +179,11 @@ class VideoSource:
         return self._frame_count
 
     @property
+    def has_buffered_frames(self) -> bool:
+        with self._lock:
+            return bool(self._buffer)
+
+    @property
     def elapsed_time(self) -> float:
         if self._start_time == 0:
             return 0.0
@@ -217,6 +222,14 @@ class VideoSource:
     def _capture_loop(self) -> None:
         """Background thread: continuously read frames into the buffer."""
         while self._running:
+            if self._source_type == "file":
+                while self._running:
+                    with self._lock:
+                        buffer_full = len(self._buffer) >= self.buffer_size
+                    if not buffer_full:
+                        break
+                    time.sleep(0.001)
+
             if self._cap is None or not self._cap.isOpened():
                 self._running = False
                 break

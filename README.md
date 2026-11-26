@@ -1,7 +1,7 @@
-<h1 align="center">Real-Time Video Anomaly Detection</h1>
+<h1 align="center">Open-World Video Intelligence</h1>
 
 <p align="center">
-  <strong>Multi-object tracking and temporal anomaly classification for surveillance video streams</strong>
+  <strong>Evidence-focused video analysis with temporal, spatial, and open-vocabulary signals</strong>
 </p>
 
 <p align="center">
@@ -10,8 +10,6 @@
   <a href="#"><img src="https://img.shields.io/badge/YOLOv8-Ultralytics-00FFFF?logo=yolo&logoColor=white" alt="YOLOv8"></a>
   <a href="#"><img src="https://img.shields.io/badge/OpenCV-4.8%2B-5C3EE8?logo=opencv&logoColor=white" alt="OpenCV"></a>
   <a href="#"><img src="https://img.shields.io/badge/License-MIT-green" alt="License"></a>
-  <a href="#"><img src="https://img.shields.io/badge/UCF--Crime_AUC-85.0%25-brightgreen" alt="AUC"></a>
-  <a href="#"><img src="https://img.shields.io/badge/Datasets-4_Benchmarks-orange" alt="Datasets"></a>
 </p>
 
 ---
@@ -21,75 +19,61 @@
 ```mermaid
 graph TD
     subgraph Input
-        A[Video I/O Async<br/>Webcam, RTSP, Files]
+        A[Video files<br/>Webcam / RTSP]
     end
 
-    subgraph Detection & Tracking
-        B[YOLOv8 Detection<br/>FP16, 640x640]
-        C[ByteTrack<br/>ID Persistence & Trajectories]
+    subgraph Spatial and Temporal Evidence
+        B[YOLOv8s<br/>COCO object detections]
+        C[ByteTrack<br/>IDs and trajectories]
+        D[Motion and proximity<br/>frame-level measurements]
     end
 
-    subgraph Classification
-        D[VideoMAE<br/>16-frame Temporal Analysis]
-        E[MIL Aggregation<br/>Per-track Scoring]
+    subgraph Semantic Evidence
+        E[VideoMAE Kinetics-400<br/>general action labels]
+        F[Optional CLIP ViT-B/32<br/>user-defined text prompts]
     end
 
     subgraph Output
-        F[Grad-CAM Heatmaps<br/>Visual Explainability]
-        G[Streamlit Dashboard<br/>Alerts & Timelines]
+        G[Streamlit dashboard<br/>annotated MP4, scene context, charts, DataFrame, CSV]
     end
 
     A -->|Frames| B
     B -->|Bounding Boxes| C
-    C -->|Object Tracks| D
-    D -->|Features| E
-    E -->|Anomaly Scores| F
-    F -->|Rendered Frames| G
+    C --> D
+    C --> E
+    B --> F
+    D --> G
+    E --> G
+    F --> G
 ```
 
 ## Key Features
 
 | Feature | Description |
 |---------|-------------|
-| **YOLOv8 Detection** | Real-time person/vehicle detection optimized for FP16 inference. |
-| **ByteTrack Tracking** | Multi-object identity persistence across frames with velocity estimation. |
-| **VideoMAE Classification** | Temporal anomaly scoring using Video Masked Autoencoders. |
-| **85% ROC-AUC** | Tested on the UCF-Crime benchmark across 13 anomaly categories. |
-| **30+ FPS** | Sustains real-time performance through ONNX optimization (40% latency reduction). |
-| **Grad-CAM Heatmaps** | Adds visual explainability to show where anomalies occur in the frame. |
-| **Streamlit Dashboard** | Live monitoring UI featuring an anomaly timeline and alert log. |
-| **4 Benchmark Datasets** | Support for downloading and preparing UCF-Crime, ShanghaiTech, CUHK Avenue, and XD-Violence. |
-| **Docker Support** | Containerized deployment with NVIDIA CUDA support. |
+| **YOLOv8s + ByteTrack** | Detects COCO objects, tracks IDs, and provides spatial/motion evidence. |
+| **VideoMAE Kinetics-400** | Produces pretrained general-action labels for temporal clips; it is not an anomaly classifier. |
+| **Optional CLIP ViT-B/32** | Ranks custom natural-language event descriptions against sampled frames. Model inference runs locally after weights are available. |
+| **Annotated MP4** | Runs detection and tracking on every frame and provides a playable, downloadable video. Audio is not retained. |
+| **Video DataFrame** | Summarizes sampled timestamps, object counts, tracks, people proximity, motion, and optional prompt matches; export as CSV. |
+| **Scene context** | Infers a broad setting such as road/traffic from detected objects; it does not identify a physical address. |
+| **Evidence previews** | Displays the annotated video and selected sampled frames alongside time-series charts. |
+| **Multiple input paths** | Upload a video, analyze a project video, or use webcam/RTSP live monitoring. |
 
-## Performance
+## Important limitations
 
-### Inference Latency Benchmark
-
-| Backend | Avg Latency | P95 | FPS | Speedup | Latency Reduction |
-|---------|------------|-----|-----|---------|-------------------|
-| PyTorch FP32 (baseline) | 18.42ms | 21.35ms | 54.3 | 1.00x | - |
-| PyTorch FP16 | 12.15ms | 14.20ms | 82.3 | 1.52x | 34.0% |
-| **ONNX Runtime (CUDA)** | **10.85ms** | **12.40ms** | **92.2** | **1.70x** | **41.1%** |
-| TensorRT FP16 | 7.20ms | 8.50ms | 138.9 | 2.56x | 60.9% |
-
-### UCF-Crime Evaluation
-
-| Metric | Score |
-|--------|-------|
-| **Frame-level ROC-AUC** | **85.0%** |
-| Average Precision | 76.4% |
-| F1-Score | 70.0% |
-| False Alarm Rate | 21.6% |
-| Equal Error Rate | 23.1% |
-
-### Multi-Dataset Support
-
-| Dataset | Videos | Anomaly Types | Domain |
-|---------|--------|---------------|--------|
-| **UCF-Crime** | 1,900 | 13 (Arson, Robbery, Assault, etc.) | Surveillance / Security |
-| **ShanghaiTech** | 437 | Campus anomalies (biking, loitering) | Campus Safety |
-| **CUHK Avenue** | 37 | Pedestrian anomalies (running, throwing) | Pedestrian Monitoring |
-| **XD-Violence** | 4,754 | 6 (Fighting, Riot, Explosion, etc.) | Multimodal Violence |
+- CLIP compares frames with the descriptions supplied by the user. It cannot
+  discover an event outside that candidate set, and its relative scores are not
+  calibrated probabilities.
+- VideoMAE's Kinetics-400 labels describe common actions; they do not prove an
+  incident or provide a UCF-Crime anomaly score.
+- Pixel speed and image-space proximity are not real-world measurements.
+- The annotated video processes every frame and can take several minutes on CPU.
+- Scene context is a visual inference from detected objects, not GPS or a verified
+  event location.
+- Treat model outputs as review cues and verify them against the displayed
+  frame evidence. The archived benchmark files are not a performance guarantee
+  for the models used by this application.
 
 ## Quick Start
 

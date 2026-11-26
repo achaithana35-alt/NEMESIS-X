@@ -2,13 +2,13 @@
 # Real-Time Video Anomaly Detection — Master Configuration
 # ============================================================
 
-# ── Detector (YOLOv8) ──────────────────────────────────────
-ddetector:
+# ── Open-vocabulary scene detector (YOLOv8) ───────────────
+detector:
   model: "yolov8s.pt"
-  device: "cpu"
+  device: "auto"
   conf_threshold: 0.25
   iou_threshold: 0.45
-  classes: [0, 1, 2, 3, 5, 7]
+  classes: null
   img_size: 640
   half: false
   max_det: 100                      # Maximum detections per frame
@@ -20,15 +20,13 @@ tracker:
   match_threshold: 0.8               # IoU threshold for matching
   min_track_length: 5                # Minimum frames for a valid track
 
-# ── Anomaly Classifier (VideoMAE) ─────────────────────────
+# ── Temporal action classifier (not an anomaly classifier) ──
 anomaly:
-  model_name: "MCG-NJU/videomae-base"  # HuggingFace model ID
-  num_classes: 14                       # UCF-Crime classes (13 anomaly + 1 normal)
-  clip_length: 16                       # Number of frames per input clip
-  stride: 4                             # Frame stride for clip sampling
-  anomaly_threshold: 0.65              # Score above this → anomaly
-  device: "cpu"
-  batch_size: 1                        # Clips per batch for inference
+  model_name: "MCG-NJU/videomae-base-finetuned-kinetics"
+  clip_length: 16
+  stride: 4
+  device: "auto"
+  batch_size: 1
 
 # ── Video I/O ─────────────────────────────────────────────
 video:
